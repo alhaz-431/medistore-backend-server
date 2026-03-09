@@ -3,17 +3,19 @@ const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 // ১. প্রিজমা ক্লায়েন্ট ইমপোর্ট করা
-const { PrismaClient } = require('@prisma/client');
+const { PrismaClient } = require("@prisma/client");
 
 const app = express();
 // ২. প্রিজমা অবজেক্ট তৈরি করা
 const prisma = new PrismaClient();
 
 // middleware
-app.use(cors({
-  origin: process.env.FRONTEND_URL || "http://localhost:3000",
-  credentials: true
-}));
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    credentials: true,
+  }),
+);
 
 app.use(express.json());
 app.use(cookieParser());
@@ -27,7 +29,7 @@ app.get("/", (req, res) => {
 app.post("/api/register", async (req, res) => {
   try {
     const { name, email, password } = req.body;
-    
+
     // প্রিজমার মাধ্যমে ডাটাবেসে ইউজার সেভ করা
     const newUser = await prisma.user.create({
       data: {
@@ -37,9 +39,9 @@ app.post("/api/register", async (req, res) => {
       },
     });
 
-    res.status(201).json({ 
-      message: "User created in Neon DB! 🎉", 
-      user: newUser 
+    res.status(201).json({
+      message: "User created in Neon DB! 🎉",
+      user: newUser,
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -49,10 +51,10 @@ app.post("/api/register", async (req, res) => {
 // server start logic
 const PORT = process.env.PORT || 5000;
 
-if (process.env.NODE_ENV !== 'production') {
-    app.listen(PORT, () => {
-        console.log(`🚀 MediStore server running on port ${PORT}`);
-    });
+if (process.env.NODE_ENV !== "production") {
+  app.listen(PORT, () => {
+    console.log(`🚀 MediStore server running on port ${PORT}`);
+  });
 }
 
 module.exports = app;
