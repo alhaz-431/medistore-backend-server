@@ -2,14 +2,15 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
+
 // ১. প্রিজমা ক্লায়েন্ট ইমপোর্ট করা
 const { PrismaClient } = require("@prisma/client");
 
 const app = express();
-// ২. প্রিজমা অবজেক্ট তৈরি করা
-const prisma = new PrismaClient({
-  datasourceUrl: process.env.DATABASE_URL,
-});
+
+// ২. প্রিজমা অবজেক্ট তৈরি করা (Prisma 7 Standard)
+// ব্র্যাকেটের ভেতর কিছু দেওয়ার দরকার নেই, এটি অটোমেটিক DATABASE_URL খুঁজে নেবে
+const prisma = new PrismaClient();
 
 // middleware
 app.use(
@@ -37,7 +38,7 @@ app.post("/api/register", async (req, res) => {
       data: {
         name,
         email,
-        password, // মনে রাখবেন: পরে এটি bcrypt দিয়ে এনক্রিপ্ট করতে হবে
+        password, // মনে রাখবেন: পরে এটি bcrypt দিয়ে এনক্রিপ্ট করতে হবে
       },
     });
 
