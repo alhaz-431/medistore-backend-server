@@ -8,11 +8,7 @@ const { PrismaClient } = require("@prisma/client");
 const app = express();
 // ২. প্রিজমা অবজেক্ট তৈরি করা
 const prisma = new PrismaClient({
-  datasources: {
-    db: {
-      url: process.env.DATABASE_URL,
-    },
-  },
+  datasourceUrl: process.env.DATABASE_URL,
 });
 
 // middleware
