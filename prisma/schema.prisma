@@ -1,0 +1,128 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  
+}
+
+enum Role {
+  CUSTOMER
+  SELLER
+  ADMIN
+}
+
+enum OrderStatus {
+  PLACED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(CUSTOMER)
+  phone     String?
+  address   String?
+  isBanned  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  medicines Medicine[]
+  orders    Order[]
+  reviews   Review[]
+  cart      Cart[]
+}
+
+model Category {
+  id        String     @id @default(cuid())
+  name      String     @unique
+  slug      String     @unique
+  createdAt DateTime   @default(now())
+
+  medicines Medicine[]
+}
+
+model Medicine {
+  id           String   @id @default(cuid())
+  name         String
+  description  String
+  price        Float
+  stock        Int      @default(0)
+  image        String?
+  manufacturer String
+  dosage       String?
+  isAvailable  Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  sellerId String
+  seller   User   @relation(fields: [sellerId], references: [id])
+
+  orderItems OrderItem[]
+  reviews    Review[]
+  cartItems  Cart[]
+}
+
+model Order {
+  id              String      @id @default(cuid())
+  totalAmount     Float
+  status          OrderStatus @default(PLACED)
+  shippingAddress String
+  shippingName    String
+  shippingPhone   String
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  customerId String
+  customer   User   @relation(fields: [customerId], references: [id])
+
+  items OrderItem[]
+}
+
+model OrderItem {
+  id       String @id @default(cuid())
+  quantity Int
+  price    Float
+
+  orderId    String
+  order      Order    @relation(fields: [orderId], references: [id])
+
+  medicineId String
+  medicine   Medicine @relation(fields: [medicineId], references: [id])
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+
+  customerId String
+  customer   User     @relation(fields: [customerId], references: [id])
+
+  medicineId String
+  medicine   Medicine @relation(fields: [medicineId], references: [id])
+}
+
+model Cart {
+  id        String   @id @default(cuid())
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now())
+
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+
+  medicineId String
+  medicine   Medicine @relation(fields: [medicineId], references: [id])
+
+  @@unique([userId, medicineId])
+}
