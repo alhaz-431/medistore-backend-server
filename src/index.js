@@ -28,7 +28,7 @@ const prisma = new PrismaClient({
 
 // --- CORS Config (এটি আপনার রেজিস্ট্রেশন এরর ফিক্স করবে) ---
 app.use(cors({
-  origin: '*', 
+  origin: ["https://medistore-client-seven.vercel.app", "http://localhost:3000"],
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'PUT'],
   credentials: true
 }));
