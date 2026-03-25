@@ -14,19 +14,19 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   max: 10, 
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  connectionTimeoutMillis: 10000,
 });
 const adapter = new PrismaPg(pool);
 
 const prisma = new PrismaClient({ 
-  adapter,
+  adapter, // এখানে কমা ঠিক করা হয়েছে
   transactionOptions: {
     maxWait: 10000, 
     timeout: 30000, 
   }
 });
 
-// --- CORS Config (এটি আপনার রেজিস্ট্রেশন এরর ফিক্স করবে) ---
+// --- CORS Config ---
 app.use(cors({
   origin: ["https://medistore-client-seven.vercel.app", "http://localhost:3000"],
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'PUT'],
@@ -66,11 +66,11 @@ app.post("/api/login", async (req, res) => {
   try {
     const { email, password } = req.body;
     const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) return res.status(404).json({ error: "ইউজার পাওয়া যায়নি!" });
-    if (user.isBanned) return res.status(403).json({ error: "অ্যাকাউন্টটি ব্যান করা হয়েছে!" });
+    if (!user) return res.status(404).json({ error: "ইউজার পাওয়া যায়নি!" });
+    if (user.isBanned) return res.status(403).json({ error: "অ্যাকাউন্টটি ব্যান করা হয়েছে!" });
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
+    if (!isMatch) return res.status(401).json({ error: "ভুল পাসওয়ার্ড!" });
 
     const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: "1d" });
     res.json({ message: "Login success!", token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
@@ -90,7 +90,16 @@ app.post("/api/categories", async (req, res) => {
   }
 });
 
-// --- ৪. মেডিসিন লিস্ট (Search & Filter) ---
+app.get("/api/categories", async (req, res) => {
+  try {
+    const categories = await prisma.category.findMany({ orderBy: { name: 'asc' } });
+    res.status(200).json(categories);
+  } catch (error) {
+    res.status(500).json({ error: "ক্যাটাগরি ডাটা পাওয়া যায়নি" });
+  }
+});
+
+// --- ৪. মেডিসিন লিস্ট ---
 app.get("/api/medicines", async (req, res) => {
   try {
     const { search, category, minPrice, maxPrice, manufacturer } = req.query;
@@ -115,13 +124,27 @@ app.get("/api/medicines", async (req, res) => {
 // --- ৫. মেডিসিন অ্যাড ---
 app.post("/api/medicines", async (req, res) => {
   try {
-    const { name, price, stock, description, manufacturer, categoryId, sellerId, image } = req.body;
+    const { name, price, stock, description, manufacturer, categoryId, sellerId } = req.body;
+    let finalSellerId = sellerId; 
+    if (!finalSellerId) {
+      const firstUser = await prisma.user.findFirst(); 
+      if (!firstUser) return res.status(400).json({ error: "ডাটাবেসে কোনো ইউজার নেই!" });
+      finalSellerId = firstUser.id;
+    }
     const newMedicine = await prisma.medicine.create({
-      data: { name, description, manufacturer, image, price: parseFloat(price), stock: parseInt(stock), category: { connect: { id: categoryId } }, seller: { connect: { id: sellerId } } }
+      data: {
+        name,
+        description: description || "No description provided", 
+        price: parseFloat(price),
+        stock: parseInt(stock),
+        manufacturer,
+        categoryId, 
+        sellerId: finalSellerId,
+      },
     });
-    res.status(201).json(newMedicine);
+    res.status(201).json({ success: true, data: newMedicine });
   } catch (error) {
-    res.status(500).json({ error: "মেডিসিন অ্যাড করা সম্ভব হয়নি।" });
+    res.status(500).json({ error: "মেডিসিন সেভ হতে পারেনি: " + error.message });
   }
 });
 
@@ -185,6 +208,37 @@ app.get("/api/orders", async (req, res) => {
   }
 });
 
+
+
+
+// একটি নির্দিষ্ট অর্ডারের ডিটেইলস দেখা
+app.get("/api/orders/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const order = await prisma.order.findUnique({
+      where: { id: id },
+      include: {
+        items: {
+          include: { medicine: true } // আইটেমের সাথে ওষুধের নামও নিয়ে আসবে
+        }
+      }
+    });
+
+    if (!order) {
+      return res.status(404).json({ error: "অর্ডারটি পাওয়া যায়নি" });
+    }
+
+    res.json(order);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+
+
+
+
 // --- ১০. অর্ডার স্ট্যাটাস আপডেট ---
 app.patch("/api/orders/:id/status", async (req, res) => {
   try {
@@ -218,6 +272,116 @@ app.patch("/api/admin/users/:id/status", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+
+// --- ১৩. অথেনটিকেশন মিডলওয়্যার (Review এর জন্য লাগবে) ---
+const verifyToken = (req, res, next) => {
+  const token = req.headers["authorization"]?.split(" ")[1];
+  if (!token) return res.status(403).json({ error: "টোকেন পাওয়া যায়নি!" });
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded; // টোকেন থেকে ইউজারের আইডি এবং রোল পাওয়া যাবে
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: "ইনভ্যালিড টোকেন!" });
+  }
+};
+
+// --- ১৪. রিভিউ পোস্ট করা (নতুন রিভিউ) ---
+app.post("/api/reviews", verifyToken, async (req, res) => {
+  try {
+    const { medicineId, rating, comment } = req.body;
+    const customerId = req.user.id; // মিডলওয়্যার থেকে পাওয়া আইডি
+
+    if (!medicineId || !rating) {
+      return res.status(400).json({ error: "মেডিসিন আইডি এবং রেটিং প্রয়োজন!" });
+    }
+
+    // ইউজার কি অলরেডি এই মেডিসিনে রিভিউ দিয়েছে? 
+    const existingReview = await prisma.review.findFirst({
+      where: { medicineId, customerId }
+    });
+
+    if (existingReview) {
+      return res.status(400).json({ error: "আপনি ইতিমধ্যে এই মেডিসিনে রিভিউ দিয়েছেন।" });
+    }
+
+    const newReview = await prisma.review.create({
+      data: {
+        rating: parseInt(rating),
+        comment: comment || "",
+        medicineId,
+        customerId
+      }
+    });
+
+    res.status(201).json({ message: "রিভিউ সফলভাবে জমা হয়েছে! ⭐", data: newReview });
+  } catch (error) {
+    res.status(500).json({ error: "রিভিউ সেভ করা যায়নি: " + error.message });
+  }
+});
+
+// --- ১৫. মেডিসিন অনুযায়ী রিভিউ দেখা ---
+app.get("/api/reviews/:medicineId", async (req, res) => {
+  try {
+    const { medicineId } = req.params;
+    const reviews = await prisma.review.findMany({
+      where: { medicineId },
+      include: { 
+        customer: { select: { name: true } } // ইউজারের নামসহ দেখাবে
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(reviews);
+  } catch (error) {
+    res.status(500).json({ error: "রিভিউ ডাটা পাওয়া যায়নি।" });
+  }
+});
+
+
+
+// --- ১৬. অ্যাডমিন ড্যাশবোর্ড স্ট্যাটিস্টিকস ---
+app.get("/api/admin/stats", async (req, res) => {
+  try {
+    // ১. মোট কত টাকা বিক্রি হয়েছে (Total Revenue)
+    const totalSales = await prisma.order.aggregate({
+      _sum: {
+        totalAmount: true,
+      },
+    });
+
+    // ২. মোট অর্ডারের সংখ্যা (Total Orders)
+    const totalOrders = await prisma.order.count();
+
+    // ৩. মোট ইউজারের সংখ্যা (Total Users)
+    const totalUsers = await prisma.user.count();
+
+    // ৪. লো-স্টক মেডিসিন (যেগুলোর স্টক ৫ এর কম)
+    const lowStockMedicines = await prisma.medicine.count({
+      where: {
+        stock: {
+          lt: 5, // ৫ এর নিচে হলে সতর্ক করবে
+        },
+      },
+    });
+
+    // ৫. ক্যাটাগরি অনুযায়ী মেডিসিন সংখ্যা (ঐচ্ছিক কিন্তু সুন্দর দেখায়)
+    const categoryCount = await prisma.category.count();
+
+    res.json({
+      totalRevenue: totalSales._sum.totalAmount || 0,
+      totalOrders,
+      totalUsers,
+      lowStockCount: lowStockMedicines,
+      totalCategories: categoryCount
+    });
+  } catch (error) {
+    res.status(500).json({ error: "স্ট্যাটিস্টিকস ডাটা পাওয়া যায়নি: " + error.message });
+  }
+});
+
+
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Server on http://localhost:${PORT}`));
