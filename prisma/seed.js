@@ -1,14 +1,16 @@
 const { PrismaClient } = require("@prisma/client");
-const { PrismaPg } = require("@prisma/adapter-pg");
 const bcrypt = require("bcryptjs");
 require("dotenv").config();
 
-const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
-const prisma = new PrismaClient({ adapter });
+// সাধারণ কানেকশনের জন্য এটিই যথেষ্ট
+const prisma = new PrismaClient();
 
 async function main() {
+  console.log("🌱 Seeding started...");
+  
   const hashedPassword = await bcrypt.hash("admin123", 10);
 
+  // ১. অ্যাডমিন ইউজার তৈরি
   const admin = await prisma.user.upsert({
     where: { email: "admin@medistore.com" },
     update: {},
@@ -22,6 +24,7 @@ async function main() {
 
   console.log("✅ Admin seeded:", admin.email);
 
+  // ২. ক্যাটাগরিগুলো তৈরি
   const categories = [
     { name: "Pain Relief", slug: "pain-relief" },
     { name: "Cold & Flu", slug: "cold-flu" },
@@ -41,12 +44,12 @@ async function main() {
     });
   }
 
-  console.log("✅ Categories seeded:", categories.length);
+  console.log("✅ All categories seeded successfully!");
 }
 
 main()
   .catch((e) => {
-    console.error(e);
+    console.error("❌ Seeding error:", e);
     process.exit(1);
   })
   .finally(async () => {
