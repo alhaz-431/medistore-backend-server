@@ -27,13 +27,14 @@ const prisma = new PrismaClient({
 
 // --- ২. CORS Config ---
 app.use(cors({
-  origin: ["https://medistore-client-seven.vercel.app", "http://localhost:3000"],
+  origin: [
+    "https://medistore-client-seven.vercel.app", // আপনার ফ্রন্টএন্ড ভার্সেল লিঙ্ক
+    "http://localhost:3000",                     // লোকাল নেক্সট জেএস
+    "http://localhost:5173"                      // যদি ভাইট ব্যবহার করেন
+  ],
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'PUT'],
   credentials: true
 }));
-
-app.use(express.json());
-const JWT_SECRET = process.env.JWT_SECRET || "medistore-secret-123";
 
 // --- ৩. অথেনটিকেশন মিডলওয়্যার (verifyToken) ---
 const verifyToken = (req, res, next) => {
