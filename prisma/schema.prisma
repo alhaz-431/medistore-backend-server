@@ -4,7 +4,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  
 }
 
 enum Role {
@@ -112,6 +111,8 @@ model Review {
   medicineId String
   medicine   Medicine @relation(fields: [medicineId], references: [id])
 }
+
+
 
 model Cart {
   id        String   @id @default(cuid())
