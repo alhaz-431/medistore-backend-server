@@ -132,39 +132,36 @@ app.get("/api/medicines", async (req, res) => {
   }
 });
 
-// --- ৯. মেডিসিন অ্যাড, আপডেট & ডিলিট ---
-app.post("/api/medicines", async (req, res) => {
+
+// --- ৯. মেডিসিন অ্যাড, আপডেট & ডিলিট (Protected with Role Check) ---
+app.post("/api/medicines", verifyToken, async (req, res) => {
   try {
-    const { name, price, stock, description, manufacturer, categoryId, sellerId } = req.body;
+    // চেক করা হচ্ছে ইউজার সেলার কি না
+    if (req.user.role !== "SELLER" && req.user.role !== "ADMIN") {
+      return res.status(403).json({ error: "শুধুমাত্র সেলার বা অ্যাডমিনরা ওষুধ যোগ করতে পারবেন!" });
+    }
+
+    const { name, price, stock, description, manufacturer, categoryId } = req.body;
+    
+    // লগইন করা ইউজারের আইডি অটোমেটিক নিয়ে নেওয়া হচ্ছে
+    const sellerId = req.user.id; 
+
     const newMedicine = await prisma.medicine.create({
-      data: { name, description: description || "No description provided", price: parseFloat(price), stock: parseInt(stock), manufacturer, categoryId, sellerId },
+      data: { 
+        name, 
+        description: description || "No description provided", 
+        price: parseFloat(price), 
+        stock: parseInt(stock), 
+        manufacturer, 
+        categoryId, 
+        sellerId 
+      },
     });
-    res.status(201).json({ success: true, data: newMedicine });
-  } catch (error) {
-    res.status(500).json({ error: "মেডিসিন সেভ হতে পারেনি" });
-  }
-});
 
-app.patch("/api/medicines/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const data = req.body;
-    const updated = await prisma.medicine.update({
-      where: { id },
-      data: { ...data, price: data.price ? parseFloat(data.price) : undefined, stock: data.stock ? parseInt(data.stock) : undefined }
-    });
-    res.json({ message: "Medicine updated!", updated });
+    res.status(201).json({ success: true, message: "Medicine added successfully!", data: newMedicine });
   } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.delete("/api/medicines/:id", async (req, res) => {
-  try {
-    await prisma.medicine.delete({ where: { id: req.params.id } });
-    res.json({ message: "Medicine deleted successfully!" });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error(error);
+    res.status(500).json({ error: "মেডিসিন সেভ হতে পারেনি। ক্যাটাগরি আইডি সঠিক কি না চেক করুন।" });
   }
 });
 
